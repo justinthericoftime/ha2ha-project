@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The HA2HA Project - Human Oversight for AI Agent Federation</title>
+    <meta name="description" content="HA2HA is a protocol extension for AI agent federation that ensures human oversight at both ends of every agent-to-agent interaction.">
+    <meta name="keywords" content="HA2HA, A2A, AI agents, agent federation, human oversight, AI safety, agent security">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="The HA2HA Project">
+    <meta property="og:description" content="Human oversight for AI agent federation. Built on A2A.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://ha2haproject.org">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The HA2HA Project">
+    <meta name="twitter:description" content="Human oversight for AI agent federation.">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #10b981;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --bg: #ffffff;
+            --bg-alt: #f9fafb;
+            --border: #e5e7eb;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            color: var(--text);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+        
+        /* Hero */
+        .hero {
+            padding: 80px 0;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 24px;
+            line-height: 1.2;
+        }
+        
+        .hero h1 span {
+            color: var(--primary);
+        }
+        
+        .hero p {
+            font-size: 20px;
+            color: var(--text-light);
+            max-width: 600px;
+            margin: 0 auto 32px;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        
+        .btn-secondary {
+            border: 2px solid var(--border);
+            color: var(--text);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        /* Problem/Solution */
+        .section {
+            padding: 64px 0;
+        }
+        
+        .section-alt {
+            background: var(--bg-alt);
+        }
+        
+        .section h2 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-light);
+            margin-bottom: 48px;
+        }
+        
+        /* Problem cards */
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        
+        .problem-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        
+        .problem-card .icon {
+            font-size: 32px;
+            margin-bottom: 16px;
+        }
+        
+        .problem-card h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .problem-card p {
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        
+        /* Protocol stack */
+        .stack {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .stack-layer {
+            border: 2px solid var(--border);
+            padding: 20px;
+            text-align: center;
+            background: white;
+        }
+        
+        .stack-layer:first-child {
+            border-radius: 12px 12px 0 0;
+            border-bottom: none;
+            background: var(--primary);
+            color: white;
+        }
+        
+        .stack-layer:last-child {
+            border-radius: 0 0 12px 12px;
+        }
+        
+        .stack-layer h4 {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        
+        .stack-layer p {
+            font-size: 13px;
+            color: var(--text-light);
+        }
+        
+        .stack-layer:first-child p {
+            color: rgba(255,255,255,0.8);
+        }
+        
+        /* Principles */
+        .principles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+            text-align: center;
+        }
+        
+        .principle {
+            padding: 24px;
+        }
+        
+        .principle .number {
+            width: 48px;
+            height: 48px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 20px;
+            margin: 0 auto 16px;
+        }
+        
+        .principle h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .principle p {
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        
+        /* Trust levels */
+        .trust-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .trust-table th,
+        .trust-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .trust-table th {
+            background: var(--bg-alt);
+            font-weight: 600;
+        }
+        
+        .trust-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .level-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .level-0 { background: #fef2f2; color: #dc2626; }
+        .level-1 { background: #fef3c7; color: #d97706; }
+        .level-2 { background: #fef9c3; color: #ca8a04; }
+        .level-3 { background: #ecfdf5; color: #059669; }
+        .level-4 { background: #dbeafe; color: #2563eb; }
+        .level-5 { background: #ede9fe; color: #7c3aed; }
+        
+        /* CTA */
+        .cta {
+            text-align: center;
+            padding: 80px 0;
+        }
+        
+        .cta h2 {
+            font-size: 36px;
+            margin-bottom: 16px;
+        }
+        
+        .cta p {
+            font-size: 18px;
+            color: var(--text-light);
+            margin-bottom: 32px;
+        }
+        
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 48px 0;
+            text-align: center;
+            color: var(--text-light);
+        }
+        
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 32px;
+            }
+            
+            .buttons {
+                flex-direction: column;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <a href="/" class="logo">HA2HA</a>
+            <ul class="nav-links">
+                <li><a href="#problem">Why HA2HA</a></li>
+                <li><a href="#how">How It Works</a></li>
+                <li><a href="#trust">Trust Model</a></li>
+                <li><a href="https://github.com/ha2haproject/ha2ha">GitHub</a></li>
+                <li><a href="./specification/SPECIFICATION.md">Spec</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Human oversight for<br><span>AI agent federation</span></h1>
+                <p>When AI agents talk to each other across organizations, humans should still be in the loop. HA2HA ensures they are.</p>
+                <div class="buttons">
+                    <a href="./specification/SPECIFICATION.md" class="btn btn-primary">Read the Spec</a>
+                    <a href="https://github.com/ha2haproject/ha2ha" class="btn btn-secondary">View on GitHub</a>
+                </div>
+            </div>
+        </section>
+        
+        <section id="problem" class="section section-alt">
+            <div class="container">
+                <h2>The Problem</h2>
+                <p class="section-subtitle">A2A enables agents to communicate. But authentication isn't enough.</p>
+                <div class="problem-grid">
+                    <div class="problem-card">
+                        <div class="icon">🦠</div>
+                        <h3>Compromised Agents</h3>
+                        <p>Malware, prompt injection, supply chain attacks can turn trusted agents into threats.</p>
+                    </div>
+                    <div class="problem-card">
+                        <div class="icon">⚙️</div>
+                        <h3>Misconfiguration</h3>
+                        <p>Bugs and misconfigurations can cause agents to behave in harmful, unintended ways.</p>
+                    </div>
+                    <div class="problem-card">
+                        <div class="icon">👤</div>
+                        <h3>Unknown Operators</h3>
+                        <p>You trust their agent, but do you trust the human behind it? Different organizations have different standards.</p>
+                    </div>
+                    <div class="problem-card">
+                        <div class="icon">💥</div>
+                        <h3>Irreversible Actions</h3>
+                        <p>Deletions, financial transactions, external communications—once done, they can't be undone.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="how" class="section">
+            <div class="container">
+                <h2>The Solution</h2>
+                <p class="section-subtitle">HA2HA adds a human oversight layer on top of A2A.</p>
+                <div class="stack">
+                    <div class="stack-layer">
+                        <h4>HA2HA</h4>
+                        <p>Human approval, trust levels, audit logging</p>
+                    </div>
+                    <div class="stack-layer">
+                        <h4>A2A</h4>
+                        <p>Agent discovery, communication, authentication</p>
+                    </div>
+                    <div class="stack-layer">
+                        <h4>Transport</h4>
+                        <p>Matrix, HTTP, gRPC</p>
+                    </div>
+                    <div class="stack-layer">
+                        <h4>Network</h4>
+                        <p>Tailscale, VPN, Internet</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="section section-alt">
+            <div class="container">
+                <h2>Core Principles</h2>
+                <p class="section-subtitle">Five principles guide every HA2HA design decision.</p>
+                <div class="principles-grid">
+                    <div class="principle">
+                        <div class="number">1</div>
+                        <h3>Humans First</h3>
+                        <p>Every cross-boundary action requires human approval</p>
+                    </div>
+                    <div class="principle">
+                        <div class="number">2</div>
+                        <h3>Trust is Earned</h3>
+                        <p>Unknown agents start blocked; trust builds over time</p>
+                    </div>
+                    <div class="principle">
+                        <div class="number">3</div>
+                        <h3>Fail Secure</h3>
+                        <p>When in doubt, block and escalate to humans</p>
+                    </div>
+                    <div class="principle">
+                        <div class="number">4</div>
+                        <h3>Audit Everything</h3>
+                        <p>Complete trails for forensics and accountability</p>
+                    </div>
+                    <div class="principle">
+                        <div class="number">5</div>
+                        <h3>Mutual Verification</h3>
+                        <p>Both ends must have human oversight</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="trust" class="section">
+            <div class="container">
+                <h2>Trust Levels</h2>
+                <p class="section-subtitle">Trust is earned through demonstrated good behavior, never assumed.</p>
+                <table class="trust-table">
+                    <thead>
+                        <tr>
+                            <th>Level</th>
+                            <th>Name</th>
+                            <th>Cooldown</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="level-badge level-0">0</span></td>
+                            <td>Blocked</td>
+                            <td>Permanent</td>
+                            <td>No communication allowed</td>
+                        </tr>
+                        <tr>
+                            <td><span class="level-badge level-1">1</span></td>
+                            <td>Unknown</td>
+                            <td>24 hours</td>
+                            <td>Every request needs explicit approval</td>
+                        </tr>
+                        <tr>
+                            <td><span class="level-badge level-2">2</span></td>
+                            <td>Provisional</td>
+                            <td>4 hours</td>
+                            <td>Approval required, enhanced monitoring</td>
+                        </tr>
+                        <tr>
+                            <td><span class="level-badge level-3">3</span></td>
+                            <td>Standard</td>
+                            <td>1 hour</td>
+                            <td>Normal operation with approval</td>
+                        </tr>
+                        <tr>
+                            <td><span class="level-badge level-4">4</span></td>
+                            <td>Trusted</td>
+                            <td>15 min</td>
+                            <td>Expedited approval, pre-approved categories</td>
+                        </tr>
+                        <tr>
+                            <td><span class="level-badge level-5">5</span></td>
+                            <td>Verified</td>
+                            <td>5 min</td>
+                            <td>Maximum trust, still requires approval</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <section class="cta">
+            <div class="container">
+                <h2>Ready to get started?</h2>
+                <p>Read the specification or check out the reference implementation.</p>
+                <div class="buttons">
+                    <a href="./docs/getting-started.md" class="btn btn-primary">Getting Started Guide</a>
+                    <a href="./specification/SPECIFICATION.md" class="btn btn-secondary">Full Specification</a>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>
+                The HA2HA Project is <a href="./LICENSE">Apache 2.0 licensed</a>.<br>
+                Built on <a href="https://github.com/a2aproject/A2A">A2A</a> by the Linux Foundation.
+            </p>
+            <p style="margin-top: 16px;">
+                <a href="https://github.com/ha2haproject/ha2ha">GitHub</a> · 
+                <a href="./specification/SPECIFICATION.md">Specification</a> · 
+                <a href="./docs/getting-started.md">Docs</a> · 
+                <a href="./CONTRIBUTING.md">Contribute</a>
+            </p>
+            <p style="margin-top: 24px; font-size: 14px;">
+                Copyright 2026 The HA2HA Project Authors
+            </p>
+        </div>
+    </footer>
+</body>
+</html>

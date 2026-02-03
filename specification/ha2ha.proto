@@ -1,0 +1,486 @@
+// HA2HA Protocol Buffer Definitions
+// Human/Agent to Human/Agent Protocol
+// Version: 0.1.0-draft
+// 
+// This file defines the data structures for HA2HA extensions to A2A.
+// Import this alongside the A2A proto definitions.
+
+syntax = "proto3";
+package ha2ha.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ha2haproject/ha2ha/proto/v1";
+option java_multiple_files = true;
+option java_outer_classname = "HA2HA";
+option java_package = "org.ha2haproject.proto.v1";
+
+// ============================================================================
+// Extension Parameters
+// ============================================================================
+
+// Ha2haExtensionParams are the parameters for the HA2HA extension
+// declared in an A2A AgentCapabilities.extensions entry.
+//
+// Example AgentCard snippet:
+// {
+//   "capabilities": {
+//     "extensions": [{
+//       "uri": "https://ha2haproject.org/spec/v1",
+//       "required": true,
+//       "params": { ... Ha2haExtensionParams as JSON ... }
+//     }]
+//   }
+// }
+message Ha2haExtensionParams {
+  // The HA2HA specification version this agent implements.
+  // Required. Example: "0.1.0"
+  string version = 1;
+  
+  // Whether this agent has human oversight enabled.
+  // MUST be true for HA2HA compliance.
+  bool human_oversight = 2;
+  
+  // The minimum trust level required to communicate with this agent.
+  // Range: 1-5. Agents below this level will be rejected.
+  int32 trust_level_required = 3;
+  
+  // Optional URL where audit log entries can be submitted.
+  optional string audit_endpoint = 4;
+  
+  // Optional contact information for human escalation.
+  optional string escalation_contact = 5;
+  
+  // Whether behavioral monitoring is enabled for this agent.
+  optional bool behavioral_monitoring = 6;
+}
+
+// ============================================================================
+// Trust Model
+// ============================================================================
+
+// TrustLevel defines the trust levels in the HA2HA trust model.
+enum TrustLevel {
+  // Default/unspecified - should not be used in practice
+  TRUST_LEVEL_UNSPECIFIED = 0;
+  
+  // Level 0: Blocked
+  // Agent is completely blocked; no communication allowed.
+  // Only a human can unblock.
+  TRUST_LEVEL_BLOCKED = 1;
+  
+  // Level 1: Unknown
+  // New or suspicious agent. Maximum scrutiny.
+  // Every request requires explicit human approval.
+  // 24-hour cooldown after violation.
+  TRUST_LEVEL_UNKNOWN = 2;
+  
+  // Level 2: Provisional
+  // Some trust established. Elevated monitoring.
+  // Approval required for every request.
+  // 4-hour cooldown after violation.
+  TRUST_LEVEL_PROVISIONAL = 3;
+  
+  // Level 3: Standard
+  // Normal operation. Standard monitoring.
+  // Approval required, can cover similar future requests.
+  // 1-hour cooldown after violation.
+  TRUST_LEVEL_STANDARD = 4;
+  
+  // Level 4: Trusted
+  // High trust. Streamlined approval.
+  // Pre-approved request categories possible.
+  // 15-minute cooldown after violation.
+  TRUST_LEVEL_TRUSTED = 5;
+  
+  // Level 5: Verified
+  // Maximum trust. Expedited processing.
+  // Still requires human approval (core HA2HA principle).
+  // 5-minute cooldown after violation.
+  TRUST_LEVEL_VERIFIED = 6;
+}
+
+// Severity of a trust violation.
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  
+  // Minor protocol violations, rate limit exceeded.
+  // Trust impact: Drop 1 level.
+  SEVERITY_LOW = 1;
+  
+  // Repeated timeout violations, unexpected behavior patterns.
+  // Trust impact: Drop 2 levels.
+  SEVERITY_MEDIUM = 2;
+  
+  // Unauthorized action attempts, sending malformed data.
+  // Trust impact: Drop to UNKNOWN.
+  SEVERITY_HIGH = 3;
+  
+  // Attempted privilege escalation, data exfiltration, bypassing approval.
+  // Trust impact: Drop to BLOCKED.
+  SEVERITY_CRITICAL = 4;
+}
+
+// ============================================================================
+// Task Metadata
+// ============================================================================
+
+// Ha2haTaskMetadata is additional metadata for tasks exchanged between
+// HA2HA-compliant agents. This is placed in the A2A Task.metadata field
+// under the "ha2ha" key.
+message Ha2haTaskMetadata {
+  // The agent ID of the requesting agent.
+  string requesting_agent = 1;
+  
+  // An identifier for the human who initiated or authorized this request.
+  string requesting_human = 2;
+  
+  // The current trust level between the agents.
+  TrustLevel trust_level = 3;
+  
+  // Whether approval is required before execution.
+  // Should always be true for cross-boundary tasks.
+  bool approval_required = 4;
+  
+  // Maximum time to wait for approval before timeout.
+  google.protobuf.Duration approval_timeout = 5;
+  
+  // Unique identifier for audit trail purposes.
+  string audit_id = 6;
+}
+
+// ============================================================================
+// Approval Operations
+// ============================================================================
+
+// ApproveRequest is sent when a human approves a pending task.
+message ApproveRequest {
+  // The ID of the task being approved.
+  string task_id = 1;
+  
+  // Identifier of the human who approved.
+  string approved_by = 2;
+  
+  // The scope of this approval.
+  ApprovalScope approval_scope = 3;
+  
+  // When this approval expires (for scopes beyond SINGLE).
+  google.protobuf.Timestamp expires_at = 4;
+  
+  // Optional conditions that must be met for approval to apply.
+  ApprovalConditions conditions = 5;
+}
+
+// ApprovalScope defines how broadly an approval applies.
+enum ApprovalScope {
+  APPROVAL_SCOPE_UNSPECIFIED = 0;
+  
+  // Approval applies only to this specific task.
+  APPROVAL_SCOPE_SINGLE = 1;
+  
+  // Approval covers similar tasks (same type, similar parameters).
+  // Requires trust level 3+.
+  APPROVAL_SCOPE_SIMILAR = 2;
+  
+  // Approval covers an entire category of tasks.
+  // Requires trust level 4+.
+  APPROVAL_SCOPE_CATEGORY = 3;
+}
+
+// ApprovalConditions specify constraints on approved actions.
+message ApprovalConditions {
+  // Maximum cost (in smallest currency unit) for this approval.
+  optional int64 max_cost = 1;
+  
+  // Explicit list of allowed action types.
+  repeated string allowed_actions = 2;
+  
+  // Custom conditions as key-value pairs.
+  google.protobuf.Struct custom = 3;
+}
+
+// ApproveResponse confirms a successful approval.
+message ApproveResponse {
+  string task_id = 1;
+  string status = 2;  // "approved"
+  string audit_id = 3;
+}
+
+// ============================================================================
+// Rejection Operations
+// ============================================================================
+
+// RejectRequest is sent when a human rejects a pending task.
+message RejectRequest {
+  // The ID of the task being rejected.
+  string task_id = 1;
+  
+  // Identifier of the human who rejected.
+  string rejected_by = 2;
+  
+  // Human-readable reason for rejection.
+  string reason = 3;
+  
+  // What action to take on the requesting agent's trust level.
+  TrustAction trust_action = 4;
+  
+  // If trust_action is REDUCE, the new trust level.
+  optional TrustLevel trust_level_new = 5;
+}
+
+// TrustAction specifies what happens to trust after a rejection.
+enum TrustAction {
+  TRUST_ACTION_UNSPECIFIED = 0;
+  
+  // No change to trust level.
+  TRUST_ACTION_NONE = 1;
+  
+  // Reduce trust level.
+  TRUST_ACTION_REDUCE = 2;
+  
+  // Immediately block the agent.
+  TRUST_ACTION_BLOCK = 3;
+}
+
+// ============================================================================
+// Escalation Operations
+// ============================================================================
+
+// EscalateRequest is sent to escalate a task or agent for higher review.
+message EscalateRequest {
+  // What is being escalated.
+  EscalationType type = 1;
+  
+  // The ID of the task or agent being escalated.
+  string id = 2;
+  
+  // Human-readable reason for escalation.
+  string reason = 3;
+  
+  // Severity of the issue prompting escalation.
+  Severity severity = 4;
+  
+  // Optional: request a specific reviewer or team.
+  optional string requested_reviewer = 5;
+}
+
+// EscalationType defines what can be escalated.
+enum EscalationType {
+  ESCALATION_TYPE_UNSPECIFIED = 0;
+  
+  // A specific task is being escalated.
+  ESCALATION_TYPE_TASK = 1;
+  
+  // An agent's overall behavior is being escalated.
+  ESCALATION_TYPE_AGENT = 2;
+  
+  // A behavioral pattern is being escalated.
+  ESCALATION_TYPE_PATTERN = 3;
+}
+
+// ============================================================================
+// Trust Management
+// ============================================================================
+
+// TrustRequest is sent to modify an agent's trust level.
+message TrustRequest {
+  // The ID of the agent whose trust is being modified.
+  string agent_id = 1;
+  
+  // The action to take.
+  TrustManagementAction action = 2;
+  
+  // The new trust level (for SET action).
+  TrustLevel trust_level = 3;
+  
+  // Human-readable reason for the change.
+  string reason = 4;
+  
+  // Identifier of the human who approved this change.
+  string approved_by = 5;
+}
+
+// TrustManagementAction defines trust modification operations.
+enum TrustManagementAction {
+  TRUST_MANAGEMENT_ACTION_UNSPECIFIED = 0;
+  
+  // Set trust to a specific level.
+  TRUST_MANAGEMENT_ACTION_SET = 1;
+  
+  // Increase trust by one level (requires human approval).
+  TRUST_MANAGEMENT_ACTION_INCREASE = 2;
+  
+  // Decrease trust by one level.
+  TRUST_MANAGEMENT_ACTION_DECREASE = 3;
+  
+  // Block the agent (set to level 0).
+  TRUST_MANAGEMENT_ACTION_BLOCK = 4;
+  
+  // Unblock the agent (set to level 1).
+  TRUST_MANAGEMENT_ACTION_UNBLOCK = 5;
+}
+
+// ============================================================================
+// Audit Logging
+// ============================================================================
+
+// AuditEntry represents a single entry in the audit log.
+// All inter-agent actions MUST be logged.
+message AuditEntry {
+  // When this event occurred.
+  google.protobuf.Timestamp timestamp = 1;
+  
+  // The type of event. Examples:
+  // - task.received
+  // - task.approved
+  // - task.rejected
+  // - task.executed
+  // - task.failed
+  // - trust.increased
+  // - trust.decreased
+  // - trust.blocked
+  // - anomaly.detected
+  string event_type = 2;
+  
+  // The task ID, if applicable.
+  string task_id = 3;
+  
+  // The agent that initiated the action.
+  string source_agent_id = 4;
+  
+  // The agent that received/processed the action.
+  string target_agent_id = 5;
+  
+  // The human involved, if any.
+  optional string human_id = 6;
+  
+  // Trust level at the time of the event.
+  TrustLevel trust_level = 7;
+  
+  // The outcome of the action.
+  string outcome = 8;
+  
+  // Cryptographic hash of entry + previous hash for tamper detection.
+  bytes hash = 9;
+  
+  // Additional details as key-value pairs.
+  google.protobuf.Struct details = 10;
+}
+
+// AuditSubmitRequest is sent to submit audit entries to a remote endpoint.
+message AuditSubmitRequest {
+  repeated AuditEntry entries = 1;
+}
+
+// AuditQueryRequest is sent to query audit logs.
+message AuditQueryRequest {
+  // Filter by agent ID.
+  optional string agent_id = 1;
+  
+  // Filter by start time.
+  google.protobuf.Timestamp start_time = 2;
+  
+  // Filter by end time.
+  google.protobuf.Timestamp end_time = 3;
+  
+  // Filter by event types.
+  repeated string event_types = 4;
+  
+  // Maximum number of entries to return.
+  int32 limit = 5;
+  
+  // Pagination token.
+  string page_token = 6;
+}
+
+// AuditQueryResponse contains audit query results.
+message AuditQueryResponse {
+  repeated AuditEntry entries = 1;
+  string next_page_token = 2;
+}
+
+// ============================================================================
+// Behavioral Monitoring
+// ============================================================================
+
+// BehaviorBaseline represents learned normal behavior for an agent.
+message BehaviorBaseline {
+  // The agent this baseline is for.
+  string agent_id = 1;
+  
+  // When this baseline was last updated.
+  google.protobuf.Timestamp updated_at = 2;
+  
+  // Normal request frequency (requests per hour).
+  double normal_request_rate = 3;
+  
+  // Standard deviation of request rate.
+  double request_rate_stddev = 4;
+  
+  // Common request types and their frequencies.
+  map<string, double> request_type_distribution = 5;
+  
+  // Common hours of activity (0-23).
+  repeated int32 active_hours = 6;
+  
+  // Normal response time (milliseconds).
+  double normal_response_time_ms = 7;
+}
+
+// AnomalyReport is generated when behavior deviates from baseline.
+message AnomalyReport {
+  // Unique ID for this anomaly.
+  string id = 1;
+  
+  // When the anomaly was detected.
+  google.protobuf.Timestamp detected_at = 2;
+  
+  // The agent exhibiting anomalous behavior.
+  string agent_id = 3;
+  
+  // Type of anomaly detected.
+  AnomalyType anomaly_type = 4;
+  
+  // Severity of the anomaly.
+  Severity severity = 5;
+  
+  // Human-readable description.
+  string description = 6;
+  
+  // Expected value (from baseline).
+  double expected_value = 7;
+  
+  // Observed value.
+  double observed_value = 8;
+  
+  // Deviation from expected (as multiple of stddev).
+  double deviation = 9;
+  
+  // Recommended action.
+  string recommended_action = 10;
+}
+
+// AnomalyType classifies the kind of anomaly detected.
+enum AnomalyType {
+  ANOMALY_TYPE_UNSPECIFIED = 0;
+  
+  // Unusual request frequency (too high or too low).
+  ANOMALY_TYPE_REQUEST_FREQUENCY = 1;
+  
+  // Unusual request types.
+  ANOMALY_TYPE_REQUEST_TYPE = 2;
+  
+  // Activity at unusual times.
+  ANOMALY_TYPE_TIMING = 3;
+  
+  // Unusual response patterns.
+  ANOMALY_TYPE_RESPONSE = 4;
+  
+  // Unusual error rates.
+  ANOMALY_TYPE_ERROR_RATE = 5;
+  
+  // Multiple anomalies combined.
+  ANOMALY_TYPE_COMPOSITE = 6;
+}
