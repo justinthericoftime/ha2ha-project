@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ha2haproject.org/schemas/approver-profile.schema.json",
+  "title": "HA2HA Approver Profile",
+  "description": "Schema for HA2HA human approver profiles",
+  "type": "object",
+  "required": ["approver", "identity", "authorization", "approval_preferences", "trust_baseline", "recovery"],
+  "properties": {
+    "approver": {
+      "type": "object",
+      "description": "Approver identification",
+      "required": ["name", "id", "created"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Unique identifier (lowercase, alphanumeric, hyphens)"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 creation timestamp"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "description": "Identity verification settings",
+      "required": ["model", "verification"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": ["channel-based", "multi-factor", "token"],
+          "description": "How the approver is identified"
+        },
+        "verification": {
+          "type": "string",
+          "enum": ["simple", "moderate", "strict"],
+          "description": "Verification stance for remote claims"
+        },
+        "channels": {
+          "type": "array",
+          "description": "Verified channels (for channel-based model)",
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Channel type (e.g., openclaw-session, telegram, email)"
+              },
+              "authenticated": {
+                "type": "boolean",
+                "default": true
+              },
+              "identifier": {
+                "type": "string",
+                "description": "Optional channel-specific identifier"
+              }
+            }
+          }
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "description": "Authorization scope and availability",
+      "required": ["domains", "availability"],
+      "properties": {
+        "domains": {
+          "type": "array",
+          "description": "Authorized domains (* for all)",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "availability": {
+          "type": "object",
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["always", "waking-hours", "scheduled"],
+              "description": "Availability mode"
+            },
+            "enforcement": {
+              "type": "string",
+              "enum": ["soft", "strict"],
+              "default": "soft",
+              "description": "How strictly to enforce availability"
+            },
+            "schedule": {
+              "type": "object",
+              "description": "Explicit schedule (for scheduled mode)",
+              "properties": {
+                "timezone": {
+                  "type": "string",
+                  "description": "IANA timezone"
+                },
+                "windows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "days": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                        }
+                      },
+                      "start": {
+                        "type": "string",
+                        "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+                      },
+                      "end": {
+                        "type": "string",
+                        "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "off_hours_behavior": {
+          "type": "string",
+          "enum": ["queue", "deny", "escalate"],
+          "default": "queue",
+          "description": "What to do with requests outside availability"
+        }
+      }
+    },
+    "approval_preferences": {
+      "type": "object",
+      "description": "How approval requests are presented",
+      "required": ["presentation"],
+      "properties": {
+        "presentation": {
+          "type": "string",
+          "enum": ["inline", "batched", "both"],
+          "description": "How to present requests"
+        },
+        "fatigue_limit": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max approvals per hour (null = unlimited)"
+        },
+        "batching": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to batch similar requests"
+        },
+        "batch_max_size": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 50,
+          "default": 10,
+          "description": "Maximum requests per batch"
+        }
+      }
+    },
+    "trust_baseline": {
+      "type": "object",
+      "description": "Default trust settings",
+      "required": ["default_level"],
+      "properties": {
+        "default_level": {
+          "type": "string",
+          "enum": ["blocked", "unknown", "provisional"],
+          "description": "Starting trust for unknown agents"
+        },
+        "pre_trusted": {
+          "type": "array",
+          "description": "Entities with elevated starting trust",
+          "items": {
+            "type": "object",
+            "required": ["name", "level"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Human-readable name"
+              },
+              "relationship": {
+                "type": "string",
+                "description": "Relationship description"
+              },
+              "level": {
+                "type": "string",
+                "enum": ["provisional", "standard", "trusted"],
+                "description": "Starting trust level"
+              },
+              "domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Domains this trust applies to"
+              },
+              "agent_id": {
+                "type": "string",
+                "description": "Specific agent ID (if known)"
+              }
+            }
+          }
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "description": "Recovery and timeout settings",
+      "required": ["timeout_hours", "timeout_action"],
+      "properties": {
+        "delegation": {
+          "type": ["array", "null"],
+          "description": "Backup approvers (null = none)",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "contact": {
+                "type": "string",
+                "description": "How to reach backup approver"
+              },
+              "domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Domains backup can approve"
+              }
+            }
+          }
+        },
+        "timeout_hours": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 168,
+          "description": "Hours before timeout action"
+        },
+        "timeout_action": {
+          "type": "string",
+          "enum": ["deny", "escalate", "hold"],
+          "description": "What to do on timeout"
+        }
+      }
+    }
+  }
+}

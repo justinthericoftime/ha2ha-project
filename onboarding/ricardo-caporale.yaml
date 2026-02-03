@@ -1,0 +1,45 @@
+# HA2HA Human Approver Profile
+# Generated: 2026-02-02
+# Onboarding Agent: Luca
+
+approver:
+  name: "Ricardo Caporale"
+  id: "ricardo-caporale"
+  created: "2026-02-02T21:30:00-05:00"
+
+identity:
+  model: "channel-based"
+  verification: "simple"
+  # Verified channels are trusted; no secondary confirmation required
+  channels:
+    - type: "openclaw-session"
+      authenticated: true
+
+authorization:
+  domains: ["*"]  # Sole authority, all request types
+  availability:
+    mode: "waking-hours"
+    enforcement: "soft"  # Judgment-based, not rigid schedule
+  off_hours_behavior: "queue"
+
+approval_preferences:
+  presentation: "inline"  # Real-time in conversation
+  fatigue_limit: null     # Self-managed, no cap
+  batching: false
+
+trust_baseline:
+  default_level: "unknown"  # Accept for review, approval required
+  pre_trusted:
+    - name: "Mic"
+      relationship: "brother"
+      level: "provisional"
+      domains: ["technical/*"]
+    - name: "JD"
+      relationship: "friend/mentor"
+      level: "provisional"
+      domains: ["*"]
+
+recovery:
+  delegation: null  # No backup approvers
+  timeout_hours: 5
+  timeout_action: "deny"  # Fail-secure

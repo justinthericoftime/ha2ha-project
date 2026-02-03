@@ -1,0 +1,38 @@
+{
+  "name": "@ha2ha/reference",
+  "version": "0.1.0",
+  "description": "HA2HA Protocol Reference Implementation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "onboard": "npx ts-node src/onboarding/onboard.ts"
+  },
+  "keywords": ["ha2ha", "a2a", "agent", "federation", "human-oversight"],
+  "author": "The HA2HA Project",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ha2haproject/ha2ha"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./onboarding": {
+      "import": "./dist/onboarding/index.js",
+      "types": "./dist/onboarding/index.d.ts"
+    }
+  }
+}

@@ -33,8 +33,14 @@ HA2HA (Human/Agent to Human/Agent) is an extension to the A2A (Agent-to-Agent) p
    - 9.4 Qualified Approver Requirements
    - 9.5 Approval Interface Requirements
    - 9.6 Latency Management
-10. [Appendix A: Protobuf Definitions](#appendix-a-protobuf-definitions)
-11. [Appendix B: HTTP Transport Binding](#appendix-b-http-transport-binding)
+10. [Human Onboarding](#10-human-onboarding)
+    - 10.2 Required Information
+    - 10.3 Onboarding Flow Structure
+    - 10.4 Profile Format
+    - 10.5 Storage Location
+    - 10.6 Configuration Reference
+11. [Appendix A: Protobuf Definitions](#appendix-a-protobuf-definitions)
+12. [Appendix B: HTTP Transport Binding](#appendix-b-http-transport-binding)
 
 ---
 
@@ -1178,6 +1184,144 @@ For high-volume, similar requests:
 A reference implementation is available at:
 - **GitHub**: https://github.com/ha2haproject/ha2ha
 - **Documentation**: https://ha2haproject.org/docs
+
+---
+
+## 10. Human Onboarding
+
+This section defines requirements for onboarding human approvers into an HA2HA-enabled system.
+
+### 10.1 Overview
+
+Before a human can approve federation requests, they MUST be registered as a qualified approver. The onboarding process captures identity, preferences, and recovery settings that govern how requests are presented and processed.
+
+**Signposting Requirement:** Implementations MUST inform users of the onboarding structure upfront. Example:
+
+> "This onboarding has 5 steps and 10 questions. It takes about 10 minutes. Here's what we'll cover: Identity, Registration, Preferences, Trust Baseline, and Recovery."
+
+### 10.2 Required Information
+
+The following information MUST be captured during onboarding:
+
+| Category | Field | Required | Description |
+|----------|-------|----------|-------------|
+| **Identity** | `identity.model` | Yes | How the approver is identified (`channel-based`, `multi-factor`, `token`) |
+| **Identity** | `identity.verification` | Yes | Verification stance (`simple`, `moderate`, `strict`) |
+| **Authorization** | `authorization.domains` | Yes | Approval scope (`*` for all, or specific domains) |
+| **Authorization** | `authorization.availability` | Yes | When approvals can be requested |
+| **Preferences** | `approval_preferences.presentation` | Yes | How requests are shown (`inline`, `batched`, `both`) |
+| **Preferences** | `approval_preferences.fatigue_limit` | No | Max approvals/hour (null = unlimited) |
+| **Trust** | `trust_baseline.default_level` | Yes | Starting trust for unknown agents |
+| **Trust** | `trust_baseline.pre_trusted` | No | Humans/agents with elevated starting trust |
+| **Recovery** | `recovery.delegation` | No | Backup approvers (null = none) |
+| **Recovery** | `recovery.timeout_hours` | Yes | Hours before unapproved requests auto-deny |
+| **Recovery** | `recovery.timeout_action` | Yes | Action on timeout (`deny`, `escalate`, `hold`) |
+
+### 10.3 Onboarding Flow Structure
+
+Implementations SHOULD present onboarding as a 5-step conversational flow:
+
+**Step 1: Identity Verification (2 questions)**
+- What identifiers represent this approver?
+- What verification level for remote claims?
+
+**Step 2: Approver Registration (2 questions)**
+- What domains can this approver authorize?
+- When is the approver available?
+
+**Step 3: Approval Preferences (2 questions)**
+- How should requests be presented?
+- Should fatigue limits be enforced?
+
+**Step 4: Trust Baseline (2 questions)**
+- What's the default trust for unknowns?
+- Are any humans/agents pre-trusted?
+
+**Step 5: Recovery (2 questions)**
+- Are there backup approvers?
+- What happens on timeout?
+
+### 10.4 Profile Format
+
+Approver profiles MUST be stored in YAML format with the following structure:
+
+```yaml
+# HA2HA Human Approver Profile
+approver:
+  name: "Human Name"
+  id: "unique-identifier"
+  created: "ISO-8601 timestamp"
+
+identity:
+  model: "channel-based"  # channel-based | multi-factor | token
+  verification: "simple"  # simple | moderate | strict
+  channels: []            # Optional: verified channel list
+
+authorization:
+  domains: ["*"]          # List of authorized domains
+  availability:
+    mode: "waking-hours"  # always | waking-hours | scheduled
+    enforcement: "soft"   # soft | strict
+  off_hours_behavior: "queue"  # queue | deny | escalate
+
+approval_preferences:
+  presentation: "inline"  # inline | batched | both
+  fatigue_limit: null     # null or max approvals per hour
+  batching: false
+
+trust_baseline:
+  default_level: "unknown"  # blocked | unknown | provisional
+  pre_trusted: []           # List of pre-trusted entities
+
+recovery:
+  delegation: null        # null or list of backup approvers
+  timeout_hours: 5
+  timeout_action: "deny"  # deny | escalate | hold
+```
+
+### 10.5 Storage Location
+
+Profiles MUST be stored at a well-known location:
+
+```
+~/.openclaw/ha2ha/approvers/{approver-id}.yaml
+```
+
+Or in a system-wide location for multi-user deployments:
+
+```
+/etc/ha2ha/approvers/{approver-id}.yaml
+```
+
+### 10.6 Configuration Reference
+
+The agent configuration MUST reference the active approver profile:
+
+```json
+{
+  "ha2ha": {
+    "enabled": true,
+    "profile": "~/.openclaw/ha2ha/approvers/ricardo-caporale.yaml",
+    "trustStore": "~/.openclaw/ha2ha/trust-store/"
+  }
+}
+```
+
+### 10.7 Implementation Notes
+
+Based on real-world onboarding experience:
+
+1. **Granularity tension**: Capture intent, not micromanagement. "Waking hours" is sufficient; exact times can be refined later.
+
+2. **Channel-based identity is common**: Most owner-operators don't need separate verification. If you're in an authenticated session, you're you.
+
+3. **Sole authority is typical**: Domain scoping matters for organizations with multiple approvers, not single-owner setups.
+
+4. **Trust baseline is the key question**: Unknown vs. Blocked is the real decision. Everything else flows from that.
+
+5. **Fail-secure timeout is intuitive**: "Auto-deny after N hours" is immediately understood.
+
+6. **Signposting reduces cognitive load**: Knowing "5 steps, 10 questions" upfront prevents abandonment.
 
 ---
 

@@ -8,6 +8,95 @@ This guide walks you through adding HA2HA support to your A2A-compatible agent.
 - Understanding of [A2A Agent Cards](https://github.com/a2aproject/A2A)
 - Human approval workflow capability (UI, CLI, or API)
 
+---
+
+## Step 0: Human Onboarding
+
+Before implementing HA2HA technically, the human(s) who will approve federation requests must be onboarded. This creates an approver profile that defines identity, preferences, and recovery settings.
+
+### What Onboarding Covers
+
+The onboarding process has **5 steps and 10 questions** (~10 minutes):
+
+| Step | Questions | Purpose |
+|------|-----------|---------|
+| **1. Identity** | 2 | How are you identified and verified? |
+| **2. Registration** | 2 | What can you approve, and when? |
+| **3. Preferences** | 2 | How should requests be presented? |
+| **4. Trust Baseline** | 2 | Default stance on unknown agents? |
+| **5. Recovery** | 2 | What happens when you're unavailable? |
+
+### Running Onboarding
+
+**OpenClaw users:**
+```
+/ha2ha onboard
+```
+
+**CLI users:**
+```bash
+npx @ha2ha/reference onboard
+```
+
+**Programmatic:**
+```typescript
+import { runOnboarding } from '@ha2ha/reference';
+await runOnboarding();
+```
+
+### Output
+
+Onboarding creates an approver profile at:
+```
+~/.openclaw/ha2ha/approvers/{your-id}.yaml
+```
+
+Example minimal profile:
+```yaml
+approver:
+  name: "Your Name"
+  id: "your-name"
+  created: "2026-02-02T12:00:00Z"
+
+identity:
+  model: "channel-based"
+  verification: "simple"
+
+authorization:
+  domains: ["*"]
+  availability:
+    mode: "waking-hours"
+
+approval_preferences:
+  presentation: "inline"
+  fatigue_limit: null
+
+trust_baseline:
+  default_level: "unknown"
+
+recovery:
+  timeout_hours: 5
+  timeout_action: "deny"
+```
+
+### Configure Your Agent
+
+After onboarding, add the HA2HA section to your agent config:
+
+```json
+{
+  "ha2ha": {
+    "enabled": true,
+    "profile": "~/.openclaw/ha2ha/approvers/your-name.yaml",
+    "trustStore": "~/.openclaw/ha2ha/trust-store/"
+  }
+}
+```
+
+Now proceed to technical implementation.
+
+---
+
 ## Step 1: Declare HA2HA Support
 
 Add the HA2HA extension to your Agent Card's capabilities:

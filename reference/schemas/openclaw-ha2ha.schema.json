@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ha2haproject.org/schemas/openclaw-ha2ha.schema.json",
+  "title": "OpenClaw HA2HA Configuration",
+  "description": "Configuration schema for HA2HA integration in OpenClaw",
+  "type": "object",
+  "properties": {
+    "ha2ha": {
+      "type": "object",
+      "description": "HA2HA protocol configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable HA2HA protocol enforcement"
+        },
+        "profile": {
+          "type": "string",
+          "description": "Path to the active approver profile YAML file"
+        },
+        "trustStore": {
+          "type": "string",
+          "description": "Path to the trust store directory"
+        },
+        "enforcement": {
+          "type": "object",
+          "description": "Enforcement settings",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["strict", "permissive", "audit-only"],
+              "default": "strict",
+              "description": "Enforcement mode"
+            },
+            "logLevel": {
+              "type": "string",
+              "enum": ["debug", "info", "warn", "error"],
+              "default": "info"
+            }
+          }
+        },
+        "federation": {
+          "type": "object",
+          "description": "Federation settings",
+          "properties": {
+            "allowInbound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Accept federation requests from other agents"
+            },
+            "allowOutbound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Send federation requests to other agents"
+            },
+            "knownAgents": {
+              "type": "array",
+              "description": "Pre-configured known agents",
+              "items": {
+                "type": "object",
+                "required": ["id", "endpoint"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Agent identifier"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Agent endpoint URL"
+                  },
+                  "trustLevel": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5,
+                    "description": "Initial trust level"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": ["enabled"]
+    }
+  }
+}
