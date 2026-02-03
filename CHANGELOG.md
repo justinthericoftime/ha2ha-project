@@ -30,12 +30,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Approval interface requirements (§9.5) - display elements, prohibited patterns
 - Latency management (§9.6) - async patterns, pre-approval, batching
 
+**Human Onboarding (§10):**
+- Onboarding flow structure - 5 steps, 10 questions, ~10 minutes
+- Signposting requirement - tell users what to expect upfront
+- Profile format (YAML) with JSON Schema validation
+- Storage location and configuration reference
+- Implementation notes from live onboarding session
+
 **Technical Appendix:**
 - HTTP transport binding (Appendix B) - paths, headers, error codes
 
+**Reference Implementation:**
+- OpenClaw skill for `/ha2ha onboard` command
+- TypeScript runtime library (loader, validator, types)
+- JSON Schema for approver profiles
+- OpenClaw config extension schema
+
+**Protobuf Updates:**
+- TrustContext message for trust state wire format
+- TrustTransitionReason enum
+- CircuitBreakerState/Status for cascading failure prevention
+- PreApprovalRule for latency management
+- payload_hash and approver_signature in ApproveRequest
+- Ha2haErrorCode enum and Ha2haError message
+
 ### Changed
 - Status upgraded from Draft to Release Candidate
-- Line count: 825 → 1,426 (+601 lines)
+- Specification: 825 → 1,570 lines (+745)
+- Protobuf: 485 → 691 lines (+206)
 
 ---
 
