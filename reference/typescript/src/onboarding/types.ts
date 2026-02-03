@@ -10,7 +10,7 @@ export type AvailabilityMode = 'always' | 'waking-hours' | 'scheduled';
 export type Enforcement = 'soft' | 'strict';
 export type OffHoursBehavior = 'queue' | 'deny' | 'escalate';
 export type PresentationMode = 'inline' | 'batched' | 'both';
-export type TrustLevel = 'blocked' | 'unknown' | 'provisional' | 'standard' | 'trusted' | 'verified';
+export type TrustLevelName = 'blocked' | 'unknown' | 'provisional' | 'standard' | 'trusted' | 'verified';
 export type TimeoutAction = 'deny' | 'escalate' | 'hold';
 
 export interface Channel {
@@ -39,7 +39,7 @@ export interface Availability {
 export interface PreTrustedEntity {
   name: string;
   relationship?: string;
-  level: Extract<TrustLevel, 'provisional' | 'standard' | 'trusted'>;
+  level: Extract<TrustLevelName, 'provisional' | 'standard' | 'trusted'>;
   domains: string[];
   agent_id?: string;
 }
@@ -73,7 +73,7 @@ export interface ApproverProfile {
     batch_max_size?: number;
   };
   trust_baseline: {
-    default_level: Extract<TrustLevel, 'blocked' | 'unknown' | 'provisional'>;
+    default_level: Extract<TrustLevelName, 'blocked' | 'unknown' | 'provisional'>;
     pre_trusted: PreTrustedEntity[];
   };
   recovery: {

@@ -157,7 +157,7 @@ export function canAuthorizeDomain(profile: ApproverProfile, domain: string): bo
 /**
  * Get the trust level for an entity
  */
-export function getTrustLevel(profile: ApproverProfile, name: string, agentId?: string): number {
+export function getTrustLevelName(profile: ApproverProfile, name: string, agentId?: string): number {
   // Check pre-trusted entities
   const preTrusted = profile.trust_baseline.pre_trusted.find(pt => 
     pt.name.toLowerCase() === name.toLowerCase() || 

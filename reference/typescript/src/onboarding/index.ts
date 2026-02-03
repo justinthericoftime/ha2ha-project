@@ -15,7 +15,7 @@
  *   const canApprove = canAuthorizeDomain(profile, 'technical/deploy');
  *   
  *   // Get trust level for an entity
- *   const trustLevel = getTrustLevel(profile, 'Mic');
+ *   const trustLevel = getTrustLevelName(profile, 'Mic');
  * }
  * ```
  */
@@ -31,7 +31,7 @@ export type {
   Enforcement,
   OffHoursBehavior,
   PresentationMode,
-  TrustLevel,
+  TrustLevelName,
   TimeoutAction,
   Channel,
   Schedule,
@@ -59,5 +59,5 @@ export {
   validateProfile,
   domainMatches,
   canAuthorizeDomain,
-  getTrustLevel,
+  getTrustLevelName,
 } from './validator';
