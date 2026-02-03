@@ -1,6 +1,6 @@
 // HA2HA Protocol Buffer Definitions
 // Human/Agent to Human/Agent Protocol
-// Version: 0.1.0-draft
+// Version: 0.1.0
 // 
 // This file defines the data structures for HA2HA extensions to A2A.
 // Import this alongside the A2A proto definitions.
@@ -149,6 +149,144 @@ message Ha2haTaskMetadata {
   
   // Unique identifier for audit trail purposes.
   string audit_id = 6;
+  
+  // Trust context for state synchronization (see §5.5).
+  TrustContext trust_context = 7;
+  
+  // Current workflow depth for cascading failure prevention (see §8.8).
+  int32 workflow_depth = 8;
+}
+
+// ============================================================================
+// Trust State (§5.5)
+// ============================================================================
+
+// TrustContext communicates trust state between agents for synchronization.
+// Both agents use the LOWER of their respective trust views (fail-secure).
+message TrustContext {
+  // Current trust level (0-5).
+  int32 level = 1;
+  
+  // Human-readable level name.
+  string level_name = 2;
+  
+  // When trust level last changed.
+  google.protobuf.Timestamp last_transition = 3;
+  
+  // Reason for last trust change.
+  TrustTransitionReason transition_reason = 4;
+  
+  // Cumulative violations at current level.
+  int32 violation_count = 5;
+  
+  // When cooldown period ends (null if not in cooldown).
+  google.protobuf.Timestamp cooldown_expires = 6;
+  
+  // Pre-approved action categories (Trust Level 3+).
+  repeated string pre_approval_scope = 7;
+}
+
+// TrustTransitionReason explains why trust level changed.
+enum TrustTransitionReason {
+  TRUST_TRANSITION_REASON_UNSPECIFIED = 0;
+  
+  // First connection, starting at Level 1.
+  TRUST_TRANSITION_REASON_INITIAL = 1;
+  
+  // Human approved trust elevation.
+  TRUST_TRANSITION_REASON_HUMAN_APPROVAL = 2;
+  
+  // Critical violation (→ Level 0).
+  TRUST_TRANSITION_REASON_VIOLATION_CRITICAL = 3;
+  
+  // High severity violation (→ Level 1).
+  TRUST_TRANSITION_REASON_VIOLATION_HIGH = 4;
+  
+  // Medium violation (drop 2 levels).
+  TRUST_TRANSITION_REASON_VIOLATION_MEDIUM = 5;
+  
+  // Low violation (drop 1 level).
+  TRUST_TRANSITION_REASON_VIOLATION_LOW = 6;
+  
+  // Human manually set trust level.
+  TRUST_TRANSITION_REASON_HUMAN_OVERRIDE = 7;
+  
+  // Cooldown period ended.
+  TRUST_TRANSITION_REASON_COOLDOWN_EXPIRED = 8;
+}
+
+// ============================================================================
+// Circuit Breaker (§8.8)
+// ============================================================================
+
+// CircuitBreakerState tracks the circuit breaker status for an agent.
+enum CircuitBreakerState {
+  CIRCUIT_BREAKER_STATE_UNSPECIFIED = 0;
+  
+  // Normal operation, requests proceed.
+  CIRCUIT_BREAKER_STATE_CLOSED = 1;
+  
+  // Tripped, all requests blocked.
+  CIRCUIT_BREAKER_STATE_OPEN = 2;
+  
+  // Testing recovery, limited requests allowed.
+  CIRCUIT_BREAKER_STATE_HALF_OPEN = 3;
+}
+
+// CircuitBreakerStatus reports current circuit breaker state for an agent.
+message CircuitBreakerStatus {
+  // Agent this status applies to.
+  string agent_id = 1;
+  
+  // Current state.
+  CircuitBreakerState state = 2;
+  
+  // When the circuit was tripped (if open/half-open).
+  google.protobuf.Timestamp tripped_at = 3;
+  
+  // Consecutive failures that caused the trip.
+  int32 failure_count = 4;
+  
+  // When automatic transition to half-open will occur.
+  google.protobuf.Timestamp half_open_at = 5;
+  
+  // Reason for current state.
+  string reason = 6;
+}
+
+// ============================================================================
+// Pre-Approval Rules (§9.6)
+// ============================================================================
+
+// PreApprovalRule defines automatic approval for certain request patterns.
+// Only available at Trust Level 3+.
+message PreApprovalRule {
+  // Unique identifier for this rule.
+  string id = 1;
+  
+  // Human-readable name.
+  string name = 2;
+  
+  // Scope of the rule.
+  ApprovalScope scope = 3;
+  
+  // Actions covered by this rule.
+  repeated string allowed_actions = 4;
+  
+  // Resources excluded from pre-approval.
+  repeated string excluded_resources = 5;
+  
+  // Maximum requests per hour under this rule.
+  int32 max_requests_per_hour = 6;
+  
+  // When this rule expires.
+  google.protobuf.Timestamp expires_at = 7;
+  
+  // Who approved this rule.
+  string approved_by = 8;
+  
+  // When this rule was created.
+  google.protobuf.Timestamp created_at = 9;
 }
 
 // ============================================================================
@@ -156,6 +294,7 @@ message Ha2haTaskMetadata {
 // ============================================================================
 
 // ApproveRequest is sent when a human approves a pending task.
+// Includes hash commitment per §7.1.1 to prevent approval dialog manipulation.
 message ApproveRequest {
   // The ID of the task being approved.
   string task_id = 1;
@@ -171,6 +310,14 @@ message ApproveRequest {
   
   // Optional conditions that must be met for approval to apply.
   ApprovalConditions conditions = 5;
+  
+  // SHA-256 hash of the canonical JSON task payload (§7.1.1 REQUIRED).
+  // Ensures the approved task cannot be modified after approval.
+  bytes payload_hash = 6;
+  
+  // Cryptographic signature from the approver covering the payload_hash.
+  // Provides non-repudiation for the approval decision.
+  bytes approver_signature = 7;
 }
 
 // ApprovalScope defines how broadly an approval applies.
@@ -206,6 +353,9 @@ message ApproveResponse {
   string task_id = 1;
   string status = 2;  // "approved"
   string audit_id = 3;
+  
+  // Confirms the payload hash was verified against the stored task.
+  bool payload_hash_verified = 4;
 }
 
 // ============================================================================
@@ -483,4 +633,59 @@ enum AnomalyType {
   
   // Multiple anomalies combined.
   ANOMALY_TYPE_COMPOSITE = 6;
+}
+
+// ============================================================================
+// Error Codes (Appendix B)
+// ============================================================================
+
+// Ha2haErrorCode defines standard error codes for HA2HA operations.
+// These map to JSON-RPC 2.0 error codes in the -32001 to -32099 range.
+enum Ha2haErrorCode {
+  HA2HA_ERROR_CODE_UNSPECIFIED = 0;
+  
+  // -32001: Approval arrived after task timeout.
+  HA2HA_ERROR_CODE_APPROVAL_EXPIRED = 1;
+  
+  // -32002: Task was already rejected.
+  HA2HA_ERROR_CODE_TASK_ALREADY_REJECTED = 2;
+  
+  // -32003: Task was already approved (duplicate).
+  HA2HA_ERROR_CODE_TASK_ALREADY_APPROVED = 3;
+  
+  // -32004: No task with this ID in pending state.
+  HA2HA_ERROR_CODE_TASK_NOT_FOUND = 4;
+  
+  // -32005: Approval hash doesn't match task payload.
+  HA2HA_ERROR_CODE_HASH_MISMATCH = 5;
+  
+  // -32006: Approver lacks required competency.
+  HA2HA_ERROR_CODE_APPROVER_NOT_QUALIFIED = 6;
+  
+  // -32007: Agent trust level is below required threshold.
+  HA2HA_ERROR_CODE_TRUST_LEVEL_INSUFFICIENT = 7;
+  
+  // -32008: Workflow depth exceeds maximum allowed.
+  HA2HA_ERROR_CODE_WORKFLOW_DEPTH_EXCEEDED = 8;
+  
+  // -32009: Rate limit exceeded for this agent/approver.
+  HA2HA_ERROR_CODE_RATE_LIMIT_EXCEEDED = 9;
+  
+  // -32010: Agent card attestation failed verification.
+  HA2HA_ERROR_CODE_ATTESTATION_FAILED = 10;
+}
+
+// Ha2haError represents a protocol error response.
+message Ha2haError {
+  // Error code from Ha2haErrorCode.
+  Ha2haErrorCode code = 1;
+  
+  // Numeric JSON-RPC error code (-32001 to -32099).
+  int32 json_rpc_code = 2;
+  
+  // Human-readable error message.
+  string message = 3;
+  
+  // Additional error details.
+  google.protobuf.Struct data = 4;
 }
