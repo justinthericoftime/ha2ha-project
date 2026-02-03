@@ -1,7 +1,7 @@
 # HA2HA Protocol Specification
 
-**Version:** 0.1.0-draft  
-**Status:** Draft  
+**Version:** 0.1.0  
+**Status:** Release Candidate  
 **Last Updated:** 2026-02-02  
 **License:** Apache 2.0  
 
@@ -15,12 +15,26 @@ HA2HA (Human/Agent to Human/Agent) is an extension to the A2A (Agent-to-Agent) p
 2. [Design Principles](#2-design-principles)
 3. [Protocol Stack](#3-protocol-stack)
 4. [A2A Integration](#4-a2a-integration)
+   - 4.5 Extension Negotiation Rules
+   - 4.6 Version Negotiation
+   - 4.7 Multi-Extension Interaction
 5. [Trust Model](#5-trust-model)
+   - 5.5 Trust State Wire Format
 6. [Message Flows](#6-message-flows)
+   - 6.4 Task Lifecycle Invariants
 7. [Operations](#7-operations)
+   - 7.1.1 Approval Hash Commitment
 8. [Security Considerations](#8-security-considerations)
+   - 8.6 Cryptographic Attestation Requirements
+   - 8.7 Automation Bias Mitigation
+   - 8.8 Cascading Failure Prevention
+   - 8.9 Audit Log Integrity
 9. [Implementation Requirements](#9-implementation-requirements)
-10. [Appendix: Protobuf Definitions](#appendix-protobuf-definitions)
+   - 9.4 Qualified Approver Requirements
+   - 9.5 Approval Interface Requirements
+   - 9.6 Latency Management
+10. [Appendix A: Protobuf Definitions](#appendix-a-protobuf-definitions)
+11. [Appendix B: HTTP Transport Binding](#appendix-b-http-transport-binding)
 
 ---
 
@@ -256,6 +270,74 @@ When sending tasks between HA2HA agents, additional metadata MUST be included:
 }
 ```
 
+### 4.5 Extension Negotiation Rules
+
+When an HA2HA-compliant agent connects to another agent, it MUST perform the following verification:
+
+#### 4.5.1 Extension Presence Check
+
+| Condition | Action |
+|-----------|--------|
+| HA2HA extension URI missing | Treat as Trust Level 0 (Blocked) OR allow discovery-only mode |
+| HA2HA extension present, `required: false` | Treat as Trust Level 1 (Unknown) with maximum scrutiny |
+| HA2HA extension present, `required: true` | Proceed with normal negotiation |
+
+#### 4.5.2 Parameter Validation
+
+| Parameter | If Missing/Invalid | Action |
+|-----------|-------------------|--------|
+| `version` | Missing | MUST reject connection |
+| `humanOversight` | Missing or `false` | MUST treat as Level 0 (Blocked), log as potential spoofing |
+| `trustLevelRequired` | Missing | Default to 1 (Unknown) |
+| `auditEndpoint` | Missing | Audit logging is local-only |
+| Unknown parameters | Present | MUST ignore (forward compatibility) |
+
+#### 4.5.3 Negotiation Failures
+
+When negotiation fails, implementations MUST:
+1. Log the failure with full Agent Card details
+2. NOT send detailed error messages (prevent reconnaissance)
+3. Notify local human administrator
+4. Add agent to monitoring watchlist
+
+### 4.6 Version Negotiation
+
+#### 4.6.1 Version Structure
+
+HA2HA uses semantic versioning with URI namespacing:
+- **URI**: `https://ha2haproject.org/spec/v{MAJOR}` — Breaking changes increment MAJOR
+- **params.version**: `{MAJOR}.{MINOR}.{PATCH}` — Semantic version within major
+
+#### 4.6.2 Compatibility Rules
+
+| Scenario | Behavior |
+|----------|----------|
+| Different major version (URI mismatch) | MUST reject connection |
+| Same major, higher minor on peer | SHOULD accept (backward compatible) |
+| Same major, lower minor on peer | MUST negotiate to lower version |
+| Unknown patch version | MUST accept (bug fixes only) |
+
+#### 4.6.3 Version Advertisement
+
+Agents SHOULD advertise multiple supported minor versions in a comma-separated list:
+```json
+{
+  "params": {
+    "version": "0.1.0",
+    "supportedVersions": "0.1.0,0.2.0"
+  }
+}
+```
+
+Negotiation selects the highest mutually supported version.
+
+### 4.7 Multi-Extension Interaction
+
+When multiple security-related extensions are declared:
+1. HA2HA takes precedence for human oversight decisions
+2. Other extensions may add additional controls but MUST NOT bypass HA2HA approval
+3. Conflicting requirements resolve in favor of stricter security (fail-secure)
+
 ---
 
 ## 5. Trust Model
@@ -370,6 +452,67 @@ HA2HA defines five trust levels:
 | **Medium** | Drop 2 levels | Repeated timeout violations, unexpected behavior patterns |
 | **Low** | Drop 1 level | Minor protocol violations, rate limit exceeded |
 
+### 5.5 Trust State Wire Format
+
+Trust state MUST be communicated in task metadata to ensure both parties agree on trust level.
+
+#### 5.5.1 Trust Context Object
+
+```json
+{
+  "ha2ha": {
+    "trustContext": {
+      "level": 3,
+      "levelName": "STANDARD",
+      "lastTransition": "2026-02-02T15:30:00Z",
+      "transitionReason": "human_approval",
+      "violationCount": 0,
+      "cooldownExpires": null,
+      "preApprovalScope": ["read", "list"]
+    }
+  }
+}
+```
+
+#### 5.5.2 Trust State Synchronization
+
+Each agent maintains its OWN view of the peer's trust level. On disagreement:
+1. Both agents use the LOWER of the two trust levels (fail-secure)
+2. The agent with lower trust view notifies the other
+3. Human review may be required to resolve persistent disagreements
+
+#### 5.5.3 Trust State Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `level` | integer | Current trust level (0-5) |
+| `levelName` | string | Human-readable level name |
+| `lastTransition` | ISO 8601 | When trust level last changed |
+| `transitionReason` | enum | Reason for last change (see below) |
+| `violationCount` | integer | Cumulative violations at current level |
+| `cooldownExpires` | ISO 8601 or null | When cooldown period ends |
+| `preApprovalScope` | array | Pre-approved action categories (Level 3+) |
+
+#### 5.5.4 Transition Reasons
+
+| Reason | Description |
+|--------|-------------|
+| `initial` | First connection, starting at Level 1 |
+| `human_approval` | Human approved trust elevation |
+| `violation_critical` | Critical violation (→ Level 0) |
+| `violation_high` | High severity violation (→ Level 1) |
+| `violation_medium` | Medium violation (drop 2 levels) |
+| `violation_low` | Low violation (drop 1 level) |
+| `human_override` | Human manually set trust level |
+| `cooldown_expired` | Cooldown period ended |
+
+#### 5.5.5 Clock and Time Handling
+
+- All timestamps MUST be UTC in ISO 8601 format
+- Cooldown enforcement uses the RECEIVING agent's clock
+- Clock skew tolerance: 60 seconds
+- Timestamps more than 60 seconds in the future MUST be rejected
+
 ---
 
 ## 6. Message Flows
@@ -456,6 +599,63 @@ Agent A           Human A           Human B           Agent B
    │                  │                  │                 │
 ```
 
+### 6.4 Task Lifecycle Invariants
+
+HA2HA imposes strict constraints on A2A task state transitions to ensure human oversight cannot be bypassed.
+
+#### 6.4.1 Core Invariant
+
+> **INVARIANT**: An A2A task MUST NOT transition from `SUBMITTED` to `WORKING` until a valid `ha2ha/approve` has been received, validated, and logged.
+
+#### 6.4.2 State Transition Rules
+
+| A2A State | Transition | HA2HA Requirement |
+|-----------|------------|-------------------|
+| (none) → SUBMITTED | Task received | Queue for HA2HA approval |
+| SUBMITTED → WORKING | Begin execution | **REQUIRES** valid `ha2ha/approve` |
+| SUBMITTED → CANCELED | Timeout or rejection | Allowed (via `ha2ha/reject` or timeout) |
+| SUBMITTED → FAILED | Validation error | Allowed (malformed request) |
+| WORKING → COMPLETED | Success | Standard A2A (HA2HA already approved) |
+| WORKING → FAILED | Error | Standard A2A (HA2HA already approved) |
+
+#### 6.4.3 Approval Validity
+
+An `ha2ha/approve` is valid if and only if:
+1. `taskId` matches a pending task in SUBMITTED state
+2. `approvedBy` identifies a qualified approver (see §9.4)
+3. `approvalScope` is appropriate for the trust level
+4. `expiresAt` has not passed (if present)
+5. Approval hash matches task payload hash (see §7.1.1)
+
+#### 6.4.4 Timeout Behavior
+
+Tasks in SUBMITTED state awaiting approval:
+- MUST timeout after `approvalTimeout` (default: 1 hour)
+- On timeout: transition to CANCELED
+- Timeout MUST NOT auto-approve (fail-secure)
+- Timeout SHOULD trigger notification to approvers
+
+#### 6.4.5 Idempotency and Replay Protection
+
+| Scenario | Behavior |
+|----------|----------|
+| Duplicate approval (same taskId) | Accept silently, log duplicate |
+| Approval after timeout | Reject with error code `APPROVAL_EXPIRED` |
+| Approval after rejection | Reject with error code `TASK_ALREADY_REJECTED` |
+| Approval for unknown taskId | Reject with error code `TASK_NOT_FOUND` |
+| Approval with mismatched hash | Reject with error code `HASH_MISMATCH` |
+
+#### 6.4.6 Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `APPROVAL_EXPIRED` | Approval arrived after task timeout |
+| `TASK_ALREADY_REJECTED` | Task was already rejected |
+| `TASK_ALREADY_APPROVED` | Task was already approved (duplicate) |
+| `TASK_NOT_FOUND` | No task with this ID in pending state |
+| `HASH_MISMATCH` | Approval hash doesn't match task payload |
+| `APPROVER_NOT_QUALIFIED` | Approver lacks required competency |
+
 ---
 
 ## 7. Operations
@@ -466,6 +666,18 @@ HA2HA defines additional operations beyond standard A2A.
 
 Approve a pending task for execution.
 
+#### 7.1.1 Approval Hash Commitment (REQUIRED)
+
+To prevent approval dialog manipulation attacks, human approval MUST include a cryptographic commitment to the full task payload.
+
+**Requirement**: The `payloadHash` field contains the SHA-256 hash of the complete task request body. The approver's signature covers this hash, ensuring the approved task cannot be modified after approval.
+
+```
+payloadHash = SHA-256(canonical_json(task_request_body))
+```
+
+Where `canonical_json()` produces deterministic JSON (sorted keys, no whitespace).
+
 **Request:**
 ```json
 {
@@ -473,6 +685,8 @@ Approve a pending task for execution.
   "approvedBy": "human-identifier",
   "approvalScope": "single",
   "expiresAt": "2026-02-02T20:00:00Z",
+  "payloadHash": "a3f2b8c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+  "approverSignature": "base64-encoded-signature",
   "conditions": {
     "maxCost": 100,
     "allowedActions": ["read", "list"]
@@ -485,9 +699,19 @@ Approve a pending task for execution.
 {
   "taskId": "task-uuid",
   "status": "approved",
-  "auditId": "audit-uuid"
+  "auditId": "audit-uuid",
+  "payloadHashVerified": true
 }
 ```
+
+#### 7.1.2 Hash Verification
+
+Before executing an approved task, the receiving agent MUST:
+1. Compute the hash of the stored task payload
+2. Compare with the `payloadHash` in the approval
+3. If mismatch: reject execution, log tampering attempt, reduce trust
+
+This prevents attacks where the approval dialog shows different content than what will be executed.
 
 ### 7.2 ha2ha/reject
 
@@ -643,6 +867,143 @@ HA2HA addresses the OWASP Agentic Security Top 10:
 | A09: Supply Chain | Attestation and verification |
 | A10: Improper Error Handling | Fail-secure with escalation |
 
+### 8.6 Cryptographic Attestation Requirements
+
+#### 8.6.1 Agent Card Signing (REQUIRED)
+
+HA2HA-compliant Agent Cards MUST include cryptographic signatures to prevent impersonation and spoofing.
+
+**Requirement**: Use A2A's `AgentCardSignature` mechanism (JWS format) with:
+- Algorithm: ES256 (ECDSA with P-256) or Ed25519
+- Key source: X.509 certificate from trusted CA, or pre-shared public key
+
+```json
+{
+  "signatures": [
+    {
+      "protected": "eyJhbGciOiJFUzI1NiJ9",
+      "signature": "base64url-encoded-signature"
+    }
+  ]
+}
+```
+
+#### 8.6.2 Certificate Requirements
+
+| Requirement | Specification |
+|-------------|---------------|
+| Key size | P-256 (ECDSA) or Ed25519 |
+| Certificate validity | Maximum 1 year |
+| Revocation checking | MUST support OCSP or CRL |
+| Self-signed | Allowed for private federations only |
+| CA-signed | REQUIRED for public federations |
+
+#### 8.6.3 Attestation Verification
+
+On connection, agents MUST:
+1. Verify signature validity
+2. Check certificate chain to trusted root
+3. Verify certificate not revoked
+4. Match certificate subject to agent identity
+5. Log verification result
+
+Failed attestation → Trust Level 0 (Blocked)
+
+### 8.7 Automation Bias Mitigation
+
+To comply with EU AI Act Article 14.4(b), implementations MUST include measures to prevent approvers from over-relying on automation.
+
+#### 8.7.1 Approval Interface Requirements
+
+Approval interfaces MUST:
+1. Display the FULL task payload at Trust Levels 1-2 (no summaries)
+2. Show agent confidence scores when available
+3. Display alternative actions considered (if available)
+4. Include visual indicators of trust level and risk
+5. Require active confirmation (not passive dismiss)
+
+#### 8.7.2 Rate Limiting
+
+To prevent approval fatigue:
+- RECOMMENDED maximum: 5 approvals per approver per hour
+- MUST track approval count per approver
+- SHOULD warn when approaching fatigue threshold
+- MAY enforce mandatory breaks after sustained high volume
+
+#### 8.7.3 Decision Quality Monitoring
+
+Implementations SHOULD monitor:
+- Average approval decision time (decreasing time signals fatigue)
+- Approval-to-rejection ratio (high ratio may signal rubber-stamping)
+- Time-of-day patterns (late-night approvals more error-prone)
+
+Anomalies SHOULD trigger:
+- Automatic escalation to backup approver
+- Notification to security team
+- Temporary pause on non-critical approvals
+
+### 8.8 Cascading Failure Prevention
+
+To address OWASP ASI08 (Cascading Hallucinations/Actions):
+
+#### 8.8.1 Workflow Depth Limits
+
+| Constraint | Requirement |
+|------------|-------------|
+| Maximum workflow depth | RECOMMENDED: 3 hops |
+| Depth tracking | MUST include `workflowDepth` in task metadata |
+| Depth exceeded | MUST reject with `WORKFLOW_DEPTH_EXCEEDED` |
+
+#### 8.8.2 Circuit Breaker Pattern
+
+Implementations MUST implement circuit breakers:
+- **Closed** (normal): Requests proceed
+- **Open** (tripped): All requests from agent blocked
+- **Half-open** (testing): Limited requests allowed
+
+**Trip conditions**:
+- 3 consecutive failures from same agent
+- 5 failures within 5 minutes from same agent
+- Any Critical severity violation
+
+**Reset conditions**:
+- Human review and explicit reset
+- Automatic reset after 1 hour (half-open state)
+
+#### 8.8.3 Failure Isolation
+
+When a task fails:
+1. Failure MUST NOT propagate to dependent tasks without human review
+2. Dependent tasks MUST be paused pending review
+3. Audit trail MUST capture failure cascade path
+4. Human MUST approve resumption of dependent tasks
+
+### 8.9 Audit Log Integrity
+
+#### 8.9.1 Hash Chaining (REQUIRED)
+
+Each audit entry MUST include a hash of the previous entry, creating a tamper-evident chain:
+
+```
+entry[n].prevHash = SHA-256(entry[n-1])
+entry[n].hash = SHA-256(entry[n] without hash field)
+```
+
+#### 8.9.2 Integrity Verification
+
+- MUST verify chain integrity on startup
+- SHOULD verify periodically during operation
+- MUST alert on chain break detection
+- MUST preserve evidence of tampering for forensics
+
+#### 8.9.3 External Audit Collection
+
+For Trust Level 3+ relationships:
+- SHOULD use external audit log collection
+- Agents MUST NOT have write access to audit storage
+- Audit storage SHOULD be append-only
+- Cross-signing between peers RECOMMENDED
+
 ---
 
 ## 9. Implementation Requirements
@@ -677,7 +1038,142 @@ HA2HA implementations MUST:
 - Clearly indicate HA2HA requirement to non-compliant agents
 - Gracefully degrade when optional features unavailable
 
-### 9.3 Reference Implementation
+### 9.4 Qualified Approver Requirements
+
+To comply with EU AI Act Article 26.2 and ISO/IEC 42001:7.2, organizations MUST define and enforce approver qualifications.
+
+#### 9.4.1 Competency Framework
+
+Qualified approvers MUST demonstrate competency in:
+
+| Competency | Description | Assessment |
+|------------|-------------|------------|
+| Threat Recognition | Identify suspicious request patterns | Practical test |
+| Protocol Understanding | HA2HA trust levels and operations | Written exam |
+| Escalation Judgment | When to escalate vs. approve/reject | Scenario-based |
+| Automation Bias Awareness | Recognize own cognitive limitations | Training completion |
+
+#### 9.4.2 Role-Based Authority
+
+| Trust Level | Approver Tier Required |
+|-------------|------------------------|
+| Level 1 (Unknown) | Senior approver (Tier 3) |
+| Level 2 (Provisional) | Standard approver (Tier 2) |
+| Level 3-4 (Standard/Trusted) | Any qualified approver (Tier 1+) |
+| Level 5 (Verified) | Any qualified approver (Tier 1+) |
+| Trust elevation | Senior approver (Tier 3) |
+| Trust reduction | Any qualified approver |
+
+#### 9.4.3 Workload Limits
+
+To ensure meaningful oversight:
+- RECOMMENDED: Maximum 20 approvals per approver per shift
+- MUST NOT assign approval duties that impede other critical functions
+- SHOULD rotate approvers to prevent fatigue
+- MUST maintain backup approvers for coverage
+
+#### 9.4.4 Training Requirements
+
+- Initial training: 4 hours minimum
+- Annual recertification: 2 hours
+- Incident review: Within 1 week of any security incident involving the approver
+
+### 9.5 Approval Interface Requirements
+
+#### 9.5.1 Required Display Elements
+
+All approval interfaces MUST display:
+
+| Element | Trust Level 1-2 | Trust Level 3-5 |
+|---------|-----------------|-----------------|
+| Requesting agent identity | Full details | Summary |
+| Trust level and history | Full | Summary |
+| Task payload | Full (no truncation) | Summary with expand |
+| Risk indicators | Prominent | Present |
+| Approval/Reject/Escalate | All three | All three |
+| Timeout countdown | Visible | Visible |
+
+#### 9.5.2 Prohibited Patterns
+
+Approval interfaces MUST NOT:
+- Auto-dismiss after timeout (fail-secure requires explicit action)
+- Use collapsible sections that hide critical content
+- Allow approval via single-tap/click (require confirmation)
+- Show only summaries at Trust Level 1-2
+- Use variable-width fonts that could hide content
+
+#### 9.5.3 Accessibility
+
+Approval interfaces MUST:
+- Support screen readers
+- Meet WCAG 2.1 AA standards
+- Work on mobile devices
+- Support keyboard-only navigation
+
+### 9.6 Latency Management
+
+Human approval adds latency. This section provides patterns to maintain usability.
+
+#### 9.6.1 Expected Latency by Trust Level
+
+| Trust Level | Typical Approval Latency | Mitigation |
+|-------------|--------------------------|------------|
+| 1 (Unknown) | Minutes to hours | Async patterns only |
+| 2 (Provisional) | Minutes | Async preferred |
+| 3 (Standard) | 1-5 minutes | Pre-approval rules |
+| 4 (Trusted) | 30 seconds - 2 minutes | Broad pre-approvals |
+| 5 (Verified) | 10-30 seconds | Maximum pre-approval scope |
+
+#### 9.6.2 Asynchronous Task Pattern
+
+For latency-tolerant workflows:
+1. Submit task, receive acknowledgment immediately
+2. Task enters SUBMITTED state, awaiting approval
+3. Requestor polls or receives webhook on approval
+4. Task executes after approval
+
+**Webhook notification**:
+```json
+{
+  "event": "task.approved",
+  "taskId": "task-uuid",
+  "approvedAt": "2026-02-02T20:15:00Z"
+}
+```
+
+#### 9.6.3 Pre-Approval Rules
+
+At Trust Level 3+, humans may define pre-approval rules:
+
+```json
+{
+  "preApprovalRule": {
+    "name": "Read-only data access",
+    "scope": "category",
+    "allowedActions": ["read", "list", "describe"],
+    "excludedResources": ["credentials", "pii"],
+    "maxRequestsPerHour": 100,
+    "expiresAt": "2026-03-02T00:00:00Z",
+    "approvedBy": "human-identifier"
+  }
+}
+```
+
+Pre-approved requests:
+- Skip manual approval queue
+- Still logged to audit trail
+- Count toward rate limits
+- Revocable by any qualified approver
+
+#### 9.6.4 Batched Approval
+
+For high-volume, similar requests:
+1. Group pending requests by category
+2. Present batch summary to approver
+3. Single approval covers all requests in batch
+4. RECOMMENDED maximum batch size: 10
+
+### 9.7 Reference Implementation
 
 A reference implementation is available at:
 - **GitHub**: https://github.com/ha2haproject/ha2ha
@@ -685,7 +1181,7 @@ A reference implementation is available at:
 
 ---
 
-## Appendix: Protobuf Definitions
+## Appendix A: Protobuf Definitions
 
 ```protobuf
 syntax = "proto3";
@@ -804,10 +1300,115 @@ message AuditEntry {
 
 ---
 
+---
+
+## Appendix B: HTTP Transport Binding
+
+This appendix defines the canonical HTTP binding for HA2HA operations.
+
+### B.1 Base Path
+
+All HA2HA operations are exposed under:
+```
+/.well-known/ha2ha/v1/
+```
+
+### B.2 Operations
+
+| Operation | Method | Path | Request Body | Response |
+|-----------|--------|------|--------------|----------|
+| Approve | POST | `/approve` | `ApproveRequest` | `ApproveResponse` |
+| Reject | POST | `/reject` | `RejectRequest` | `RejectResponse` |
+| Escalate | POST | `/escalate` | `EscalateRequest` | `EscalateResponse` |
+| Trust | POST | `/trust` | `TrustRequest` | `TrustResponse` |
+| Audit Submit | POST | `/audit` | `AuditSubmitRequest` | `AuditSubmitResponse` |
+| Audit Query | GET | `/audit` | (query params) | `AuditQueryResponse` |
+| Trust Status | GET | `/trust/{agentId}` | — | `TrustStatusResponse` |
+
+### B.3 Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Content-Type` | Yes | `application/json` |
+| `X-HA2HA-Version` | Yes | HA2HA version (e.g., `0.1.0`) |
+| `X-HA2HA-Agent-Id` | Yes | Requesting agent identifier |
+| `X-HA2HA-Request-Id` | Yes | Unique request ID for idempotency |
+| `X-HA2HA-Timestamp` | Yes | ISO 8601 timestamp |
+| `X-HA2HA-Signature` | Recommended | Request signature for integrity |
+
+### B.4 Error Responses
+
+Errors follow JSON-RPC 2.0 error object format:
+
+```json
+{
+  "error": {
+    "code": -32001,
+    "message": "Approval expired",
+    "data": {
+      "taskId": "task-uuid",
+      "expiredAt": "2026-02-02T20:00:00Z"
+    }
+  }
+}
+```
+
+#### B.4.1 Error Codes
+
+| Code | Name | HTTP Status |
+|------|------|-------------|
+| -32001 | APPROVAL_EXPIRED | 410 Gone |
+| -32002 | TASK_ALREADY_REJECTED | 409 Conflict |
+| -32003 | TASK_ALREADY_APPROVED | 409 Conflict |
+| -32004 | TASK_NOT_FOUND | 404 Not Found |
+| -32005 | HASH_MISMATCH | 400 Bad Request |
+| -32006 | APPROVER_NOT_QUALIFIED | 403 Forbidden |
+| -32007 | TRUST_LEVEL_INSUFFICIENT | 403 Forbidden |
+| -32008 | WORKFLOW_DEPTH_EXCEEDED | 400 Bad Request |
+| -32009 | RATE_LIMIT_EXCEEDED | 429 Too Many Requests |
+| -32010 | ATTESTATION_FAILED | 401 Unauthorized |
+
+### B.5 Example: Approve Request
+
+**Request:**
+```http
+POST /.well-known/ha2ha/v1/approve HTTP/1.1
+Host: agent-b.example.com
+Content-Type: application/json
+X-HA2HA-Version: 0.1.0
+X-HA2HA-Agent-Id: agent-a-uuid
+X-HA2HA-Request-Id: req-12345
+X-HA2HA-Timestamp: 2026-02-02T20:15:00Z
+
+{
+  "taskId": "task-uuid",
+  "approvedBy": "human@example.com",
+  "approvalScope": "single",
+  "payloadHash": "a3f2b8c9...",
+  "approverSignature": "base64..."
+}
+```
+
+**Response:**
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "taskId": "task-uuid",
+  "status": "approved",
+  "auditId": "audit-uuid",
+  "payloadHashVerified": true
+}
+```
+
+---
+
 ## Document History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.1.0 | 2026-02-02 | Release candidate with stress test findings |
 | 0.1.0-draft | 2026-02-02 | Initial draft |
 
 ---

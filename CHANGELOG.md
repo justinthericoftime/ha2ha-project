@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-02-02
+
+### Added (Stress Test Findings)
+
+**Protocol Foundation:**
+- Extension negotiation rules (§4.5) - what to do on version mismatch, missing params
+- Version negotiation (§4.6) - semantic versioning with backward compatibility
+- Multi-extension interaction (§4.7) - HA2HA takes precedence
+- Trust state wire format (§5.5) - how trust level is communicated
+- Task lifecycle invariants (§6.4) - when tasks can execute
+
+**Security Hardening:**
+- Approval hash commitment (§7.1.1) - prevents dialog manipulation attacks
+- Cryptographic attestation requirements (§8.6) - Agent Card signing
+- Automation bias mitigation (§8.7) - rate limits, decision quality monitoring
+- Cascading failure prevention (§8.8) - circuit breakers, depth limits
+- Audit log integrity (§8.9) - hash chaining for tamper detection
+
+**Implementation Guidance:**
+- Qualified approver requirements (§9.4) - competency, authority, workload
+- Approval interface requirements (§9.5) - display elements, prohibited patterns
+- Latency management (§9.6) - async patterns, pre-approval, batching
+
+**Technical Appendix:**
+- HTTP transport binding (Appendix B) - paths, headers, error codes
+
+### Changed
+- Status upgraded from Draft to Release Candidate
+- Line count: 825 → 1,426 (+601 lines)
+
+---
+
 ## [0.1.0-draft] - 2026-02-02
 
 ### Added
